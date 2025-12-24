@@ -44,7 +44,13 @@ begin
     writeln('6.Number of elements');
     
     if menu_item^ = 7 then write('-> ') else write('   ');
-    writeln('7.Exit');
+    writeln('7.Show tree');
+
+    if menu_item^ = 8 then write('-> ') else write('   ');
+    writeln('8.Delete element');
+
+    if menu_item^ = 9 then write('-> ') else write('   ');
+    writeln('9.Exit');
         
     writeln(messege^);
     messege^:='';
@@ -56,9 +62,9 @@ begin
     if key^ = #72 then // стрелка вверх
       if menu_item^ > 1 then
         menu_item^ := menu_item^ - 1
-      else menu_item^ := 7;
+      else menu_item^ := 9;
     if key^ = #80 then // Стрелка вниз
-      if menu_item^ < 7 then
+      if menu_item^ < 9 then
         menu_item^ := menu_item^ + 1
       else menu_item^:= 1;
   until key^ = #10; // Enter
@@ -70,12 +76,12 @@ procedure countelement(item: Ptree; var counter: integer);
 begin
   if item^.left<>nil then
     begin
-    counter+=1;
+    counter:=counter+1;
     countelement(item^.left, counter)
     end;
   if item^.right<>nil then 
     begin
-    counter+=1;
+    counter:=counter+1;
     countelement(item^.right, counter)
     end;
 end;
@@ -91,7 +97,7 @@ begin
     end;
 end;
  
-// Созданиме структуры
+// Создание структуры
 procedure createstruct(var item: Ptree);
   begin
   item:= nil;
@@ -158,16 +164,133 @@ var
   index: Pinteger;
 begin
   writeln('Write number of the element:');
-  new(find);
+  find:=nil;
   new(index);
   readln(index^);
-  find^.datastr:=nil;
-  find^.dataint:=nil;
   findelement(find, item, index);
-  if find^.datastr=nil then messege^:='The element does not exist'
-  else messege^:= 'Age = '+IntToStr(find^.dataint^)+', name = '+find^.datastr^
+  if find=nil then messege^:='The element does not exist'
+  else messege^:= 'Age = '+IntToStr(find^.dataint^)+', name = '+find^.datastr^;
+  dispose(index);
 end;
-  
+
+// Найти минимальный
+procedure findmin(var item, minitem: Ptree);
+begin
+  if item^.left=nil then minitem:=item
+  else findmin(item^.left, minitem);
+end;
+
+// Найти родителя
+function findparent(item, find: Ptree): Ptree;
+begin
+  if (find=nil) or (find=item) then findparent:=nil
+  else if (find^.left=item) or (find^.right=item) then findparent:=find 
+  else if item^.index^ < find^.index^ then  findparent:=findparent(item,find^.left)
+  else findparent:=findparent(item,find^.right)
+end;
+
+// Замена(полная)
+procedure replaceitem(var olditem, newitem, item: Ptree);
+var 
+  parent: Ptree;
+begin
+  parent := findparent(olditem, item);
+  if parent <> nil then 
+  begin
+    if parent^.left = olditem then 
+      parent^.left := newitem
+    else 
+      parent^.right := newitem;
+  end
+  else // olditem - корень дерева
+    item := newitem;
+  if olditem^.index <> nil then 
+    dispose(olditem^.index);
+  if olditem^.datastr <> nil then 
+    dispose(olditem^.datastr);
+  if olditem^.dataint <> nil then 
+    dispose(olditem^.dataint);
+  dispose(olditem);
+  olditem := nil; 
+end;
+
+// Замена(если два потомка)
+procedure halfreplaceitem(var olditem, newitem, item: Ptree);
+var 
+  parent: Ptree;
+begin
+  parent := findparent(newitem, item);
+  olditem^.index^:=newitem^.index^;
+  olditem^.dataint^:=newitem^.dataint^;
+  olditem^.datastr^:=newitem^.datastr^;
+  if parent <> nil then 
+  begin
+    if parent^.left = newitem then 
+      parent^.left := newitem^.right
+    else 
+      parent^.right := newitem^.right;
+  end;
+  dispose(newitem^.index);
+  dispose(newitem^.datastr);
+  dispose(newitem^.dataint);
+  dispose(newitem);
+  newitem := nil;
+
+end;
+
+// Удалить элемент
+procedure deletelement(var item: Ptree; messege: PAnsiString);
+var 
+  olditem,newitem: Ptree;
+  index: Pinteger;
+begin
+  writeln('Write number of the element:');
+  olditem:=nil;
+  newitem:=nil;
+  new(index);
+  readln(index^);
+  findelement(olditem, item, index);
+  if olditem=nil then messege^:='The element does not exist'
+  else 
+    begin
+    if olditem^.left=nil then
+      if olditem^.right=nil then  //лист
+        replaceitem(olditem, newitem, item)
+      else replaceitem(olditem, olditem^.right, item) //один потомок
+    else 
+      begin
+      if olditem^.right=nil then replaceitem(olditem, olditem^.left, item) //один потомок
+      else
+        begin  // два потомка
+        findmin(olditem^.right,newitem);
+        halfreplaceitem(olditem, newitem, item);
+        end;
+      end;
+    messege^:='Element deleted';
+    dispose(index);
+    end;
+end;
+
+// Отображение дерева
+procedure showtree(item: Ptree; messege: PAnsiString);
+var 
+  l,r: string;
+begin
+  if item^.left=nil then l:='no'
+  else l:=IntToStr(item^.left^.index^);
+  if item^.right=nil then r:='no'
+  else r:=IntToStr(item^.right^.index^);
+  messege^:=messege^+'Number: '+ IntToStr(item^.index^)+ ', age: ' +IntToStr(item^.dataint^)+ ', name: ' +item^.datastr^+ ', left child: ' +l+ ', right child: ' +r+ sLineBreak;
+  if item^.left<>nil then
+    begin
+    showtree(item^.left, messege)
+    end;
+  if item^.right<>nil then 
+    begin
+    showtree(item^.right, messege)
+    end;
+end;
+
 // Пустой?
 procedure emptiness(item: Ptree; messege: PAnsiString);
 begin
@@ -238,7 +361,7 @@ case menu_item^ of
   
   4: begin 
   if exist_elem^='yes' then inputfind(item, messege)
-  else messege^:= 'Tree is empty or net created' 
+  else messege^:= 'Tree is empty or not created' 
   end;
   
   5: begin 
@@ -250,8 +373,18 @@ case menu_item^ of
   if exist_str^='yes' then messege^:=IntToStr(outputcounter(item))+' elements in tree'
   else messege^:='Tree not created'
   end;
+
+  7: begin
+  if exist_elem^='yes' then showtree(item, messege)
+  else messege^:='Tree is empty or not created'
+  end;
+
+  8: begin
+  if exist_elem^='yes' then deletelement(item, messege)
+  else messege^:='Tree is empty or not created'
+  end;
   
-  7: exit^:='yes';
+  9: exit^:='yes';
   end;
 end;
 end.
